@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coco Colours Studio Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        .tab-btn { transition: all 0.15s; }
+        .tab-btn.active { background: #0d9488; color: white; }
+        .fl-card { transition: all 0.15s; cursor: pointer; }
+        .fl-card:hover { transform: scale(1.02); }
+        .fl-card.selected { ring: 2px; box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.3); }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div id="app" class="max-w-6xl mx-auto p-4">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-4">
+            <h1 class="text-2xl font-bold text-gray-800">🎨 Coco Colours Studio Manager</h1>
+            <div id="connection-status" class="text-xs px-2 py-1 rounded bg-yellow-100 text-yellow-700">Verbinde...</div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex gap-2 mb-4 flex-wrap">
+            <button onclick="showTab('freelancer')" id="tab-freelancer" class="tab-btn px-4 py-2 rounded-lg bg-gray-200 font-medium">👥 Freelancer</button>
+            <button onclick="showTab('erfassung')" id="tab-erfassung" class="tab-btn px-4 py-2 rounded-lg bg-gray-200 font-medium">📝 Erfassung</button>
+            <button onclick="showTab('kassenbuch')" id="tab-kassenbuch" class="tab-btn px-4 py-2 rounded-lg bg-gray-200 font-medium">💰 Kassenbuch</button>
+            <button onclick="showTab('auswertung')" id="tab-auswertung" class="tab-btn px-4 py-2 rounded-lg bg-gray-200 font-medium">📊 Auswertung</button>
+        </div>
+
+        <!-- ============ TAB: FREELANCER ============ -->
+        <div id="content-freelancer" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow p-6 mb-4">
+                <h2 class="text-lg font-semibold mb-4">Neuen Freelancer anlegen</h2>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <input type="text" id="fl-name" placeholder="Name" class="px-3 py-2 border rounded-lg">
+                    <input type="text" id="fl-adresse" placeholder="Adresse" class="px-3 py-2 border rounded-lg">
+                    <input type="color" id="fl-farbe" value="#10b981" class="h-10 w-20 rounded cursor-pointer">
+                    <button onclick="addFreelancer()" class="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">Anlegen</button>
+                </div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold mb-4">Freelancer</h2>
+                <div id="freelancer-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+            </div>
+        </div>
+
+        <!-- ============ TAB: ERFASSUNG ============ -->
+        <div id="content-erfassung" class="tab-content hidden">
+            <!-- Freelancer Auswahl -->
+            <div class="bg-white rounded-lg shadow p-4 mb-4">
+                <p class="text-sm text-gray-500 mb-2">Freelancer auswählen</p>
+                <div id="erfassung-freelancer-list" class="flex gap-2 flex-wrap"></div>
+            </div>
+
+            <!-- Ausgewählter Freelancer -->
+            <div id="selected-freelancer-info" class="hidden">
+                <div id="selected-fl-card" class="bg-teal-50 border-2 border-teal-500 rounded-lg p-4 mb-4"></div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+                    <!-- Kaution erfassen -->
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-semibold mb-4 text-teal-700">💰 Kaution erfassen</h3>
+                        <div class="space-y-3">
+                            <input type="date" id="kaution-datum" class="w-full px-3 py-2 border rounded-lg">
+                            <input type="text" id="kaution-bezeichnung" placeholder="Bezeichnung (z.B. K-001)" class="w-full px-3 py-2 border rounded-lg">
+                            <input type="number" id="kaution-betrag" placeholder="Betrag €" step="0.01" class="w-full px-3 py-2 border rounded-lg">
+                            <button onclick="addKaution()" class="w-full px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">Kaution speichern</button>
+                        </div>
+                    </div>
+
+                    <!-- Termin erfassen -->
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-semibold mb-4 text-orange-600">🎨 Tattootermin erfassen</h3>
+                        <div class="space-y-3">
+                            <input type="date" id="termin-datum" class="w-full px-3 py-2 border rounded-lg">
+                            <input type="number" id="termin-betrag" placeholder="Gesamtbetrag €" step="0.01" class="w-full px-3 py-2 border rounded-lg" oninput="updateStudioAnteil()">
+                            <p id="studio-anteil" class="text-sm text-teal-600"></p>
+                            
+                            <div class="border-t pt-3">
+                                <p class="text-sm text-gray-500 mb-2">Kautionen verrechnen</p>
+                                <div id="kaution-checkboxes" class="space-y-2 max-h-32 overflow-y-auto"></div>
+                            </div>
+
+                            <div class="border-t pt-3">
+                                <p class="text-sm text-gray-500 mb-2">Gutscheine</p>
+                                <div id="gutschein-container" class="space-y-2"></div>
+                                <button type="button" onclick="addGutscheinZeile()" class="text-sm text-teal-600 hover:text-teal-800">+ Gutschein</button>
+                            </div>
+
+                            <div class="border-t pt-3">
+                                <p class="text-sm text-gray-500 mb-2">PayPal-Kautionen</p>
+                                <div id="paypal-container" class="space-y-2"></div>
+                                <button type="button" onclick="addPaypalZeile()" class="text-sm text-teal-600 hover:text-teal-800">+ PayPal</button>
+                            </div>
+
+                            <button onclick="addTermin()" class="w-full px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 mt-2">Termin speichern</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Listen -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <!-- Offene Kautionen -->
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="font-semibold mb-3">Offene Kautionen</h3>
+                        <div id="offene-kautionen-list" class="space-y-2"></div>
+                    </div>
+
+                    <!-- Termine -->
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="font-semibold mb-3">Termine (aktueller Monat)</h3>
+                        <div id="termine-list" class="space-y-2"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ TAB: KASSENBUCH ============ -->
+        <div id="content-kassenbuch" class="tab-content hidden">
+            <!-- Kassenbestand -->
+            <div class="bg-white rounded-lg shadow p-6 mb-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                    <div class="p-4 bg-blue-50 rounded-lg">
+                        <p class="text-xs text-gray-500 uppercase">Anfangsbestand</p>
+                        <p id="kb-anfangsbestand" class="text-2xl font-bold text-blue-600">0,00 €</p>
+                    </div>
+                    <div class="p-4 bg-teal-50 rounded-lg border-2 border-teal-200">
+                        <p class="text-xs text-gray-500 uppercase">Aktueller Bestand</p>
+                        <p id="kb-aktuell" class="text-3xl font-bold text-teal-600">0,00 €</p>
+                    </div>
+                    <div class="p-4 bg-gray-50 rounded-lg">
+                        <p class="text-xs text-gray-500 uppercase">Endbestand Monat</p>
+                        <p id="kb-endbestand" class="text-2xl font-bold text-gray-700">0,00 €</p>
+                    </div>
+                </div>
+                <div class="flex justify-center gap-8 mt-4 text-sm">
+                    <span>Einnahmen (Monat): <span id="kb-einnahmen" class="text-green-600 font-medium">0,00 €</span></span>
+                    <span>Ausgaben (Monat): <span id="kb-ausgaben" class="text-red-600 font-medium">0,00 €</span></span>
+                </div>
+            </div>
+
+            <!-- Monatsauswahl -->
+            <div class="bg-white rounded-lg shadow p-4 mb-4">
+                <div class="flex items-center gap-3">
+                    <button onclick="prevMonthKB()" class="px-3 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 font-bold text-xl">←</button>
+                    <select id="kb-monat" onchange="renderKassenbuch()" class="px-3 py-2 border rounded-lg">
+                        <option value="01">Januar</option>
+                        <option value="02">Februar</option>
+                        <option value="03">März</option>
+                        <option value="04">April</option>
+                        <option value="05">Mai</option>
+                        <option value="06">Juni</option>
+                        <option value="07">Juli</option>
+                        <option value="08">August</option>
+                        <option value="09">September</option>
+                        <option value="10">Oktober</option>
+                        <option value="11">November</option>
+                        <option value="12">Dezember</option>
+                    </select>
+                    <select id="kb-jahr" onchange="renderKassenbuch()" class="px-3 py-2 border rounded-lg">
+                        <option value="2024">2024</option>
+                        <option value="2025">2025</option>
+                        <option value="2026">2026</option>
+                        <option value="2027">2027</option>
+                    </select>
+                    <button onclick="nextMonthKB()" class="px-3 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 font-bold text-xl">→</button>
+                    <button onclick="exportKassenbuchPDF()" class="ml-auto px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">📄 PDF Export</button>
+                </div>
+            </div>
+
+            <!-- Neue Buchung -->
+            <div class="bg-white rounded-lg shadow p-6 mb-4">
+                <h2 class="text-lg font-semibold mb-4">Neue Buchung erfassen</h2>
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">Datum</label>
+                        <input type="date" id="buchung-datum" class="w-full px-3 py-2 border rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">Betrag (€)</label>
+                        <input type="number" id="buchung-betrag" step="0.01" placeholder="0,00" class="w-full px-3 py-2 border rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">Bemerkung</label>
+                        <input type="text" id="buchung-bemerkung" placeholder="z.B. Materialeinkauf" class="w-full px-3 py-2 border rounded-lg">
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="setBuchungTyp('einnahme')" id="btn-einnahme" class="flex-1 px-3 py-2 rounded-lg bg-green-100 text-green-700 hover:bg-green-200">+ Einnahme</button>
+                        <button onclick="setBuchungTyp('ausgabe')" id="btn-ausgabe" class="flex-1 px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200">− Ausgabe</button>
+                    </div>
+                    <button onclick="addBuchung()" class="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">💾 Speichern</button>
+                </div>
+            </div>
+
+            <!-- Buchungen Liste -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold">Buchungen</h2>
+                    <span id="kb-anzahl" class="text-sm text-gray-500">0 Einträge</span>
+                </div>
+                <div id="buchungen-list" class="space-y-2"></div>
+            </div>
+
+            <!-- Anfangsbestand setzen -->
+            <div class="bg-white rounded-lg shadow p-4 mt-4">
+                <div class="flex items-center gap-4">
+                    <span class="text-sm text-gray-600">Globaler Anfangsbestand (Startkapital):</span>
+                    <input type="number" id="global-anfangsbestand" step="0.01" placeholder="0,00" class="px-3 py-2 border rounded-lg w-32">
+                    <button onclick="setAnfangsbestand()" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700">Setzen</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ TAB: AUSWERTUNG ============ -->
+        <div id="content-auswertung" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center gap-4 mb-6">
+                    <h2 class="text-lg font-semibold">Auswertung</h2>
+                    <select id="auswertung-monat" onchange="loadAuswertung()" class="px-3 py-2 border rounded-lg">
+                        <option value="01">Januar</option>
+                        <option value="02">Februar</option>
+                        <option value="03">März</option>
+                        <option value="04">April</option>
+                        <option value="05">Mai</option>
+                        <option value="06">Juni</option>
+                        <option value="07">Juli</option>
+                        <option value="08">August</option>
+                        <option value="09">September</option>
+                        <option value="10">Oktober</option>
+                        <option value="11">November</option>
+                        <option value="12">Dezember</option>
+                    </select>
+                    <select id="auswertung-jahr" onchange="loadAuswertung()" class="px-3 py-2 border rounded-lg">
+                        <option value="2024">2024</option>
+                        <option value="2025">2025</option>
+                        <option value="2026">2026</option>
+                        <option value="2027">2027</option>
+                    </select>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="border-b">
+                                <th class="text-left py-2">Freelancer</th>
+                                <th class="text-center py-2">Termine</th>
+                                <th class="text-right py-2">Umsatz (gesamt)</th>
+                                <th class="text-right py-2">Studio (30%)</th>
+                                <th class="text-center py-2">Kautionen Anz.</th>
+                                <th class="text-right py-2">Kautionen €</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auswertung-body"></tbody>
+                        <tfoot id="auswertung-footer" class="border-t-2 font-bold"></tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============ GLOBALE VARIABLEN ============
+        let freelancers = [];
+        let kautionen = [];
+        let termine = [];
+        let buchungen = [];
+        let selectedFreelancerId = null;
+        let buchungTyp = null;
+        let anfangsbestand = 0;
+
+        // Aktuelles Datum Safari-kompatibel
+        const heute = new Date();
+        const heuteStr = heute.getFullYear() + '-' + String(heute.getMonth() + 1).padStart(2, '0') + '-' + String(heute.getDate()).padStart(2, '0');
+        let currentKBMonth = String(heute.getMonth() + 1).padStart(2, '0');
+        let currentKBYear = String(heute.getFullYear());
+
+        // ============ INIT ============
+        async function init() {
+            // Datum-Felder setzen
+            document.getElementById('kaution-datum').value = heuteStr;
+            document.getElementById('termin-datum').value = heuteStr;
+            document.getElementById('buchung-datum').value = heuteStr;
+            document.getElementById('kb-monat').value = currentKBMonth;
+            document.getElementById('kb-jahr').value = currentKBYear;
+            document.getElementById('auswertung-monat').value = currentKBMonth;
+            document.getElementById('auswertung-jahr').value = currentKBYear;
+
+            await loadAllData();
+            showTab('erfassung');
+        }
+
+        async function loadAllData() {
+            try {
+                const [flRes, kRes, tRes, bRes, abRes] = await Promise.all([
+                    fetch('/api/freelancers'),
+                    fetch('/api/kautionen'),
+                    fetch('/api/termine'),
+                    fetch('/api/buchungen'),
+                    fetch('/api/einstellungen/anfangsbestand')
+                ]);
+
+                if (flRes.ok) freelancers = await flRes.json();
+                if (kRes.ok) kautionen = await kRes.json();
+                if (tRes.ok) termine = await tRes.json();
+                if (bRes.ok) buchungen = await bRes.json();
+                if (abRes.ok) {
+                    const ab = await abRes.json();
+                    anfangsbestand = parseFloat(ab.value) || 0;
+                    document.getElementById('global-anfangsbestand').value = anfangsbestand || '';
+                }
+
+                document.getElementById('connection-status').innerHTML = '● Online';
+                document.getElementById('connection-status').className = 'text-xs px-2 py-1 rounded bg-green-100 text-green-700';
+
+                renderAll();
+            } catch (err) {
+                console.error('Ladefehler:', err);
+                document.getElementById('connection-status').innerHTML = '○ Offline';
+                document.getElementById('connection-status').className = 'text-xs px-2 py-1 rounded bg-red-100 text-red-700';
+            }
+        }
+
+        function renderAll() {
+            renderFreelancerList();
+            renderErfassungFreelancerList();
+            renderKassenbuch();
+            loadAuswertung();
+        }
+
+        // ============ TAB NAVIGATION ============
+        function showTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById('content-' + tab).classList.remove('hidden');
+            document.getElementById('tab-' + tab).classList.add('active');
+        }
+
+        // ============ FREELANCER ============
+        function renderFreelancerList() {
+            const container = document.getElementById('freelancer-list');
+            const active = freelancers.filter(f => !f.archived);
+            const archived = freelancers.filter(f => f.archived);
+
+            container.innerHTML = active.map(f => `
+                <div class="p-4 rounded-lg border-l-4" style="border-color: ${f.farbe}; background: ${f.farbe}15;">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="font-semibold">${escapeHtml(f.name)}</p>
+                            <p class="text-sm text-gray-500">${escapeHtml(f.adresse || '-')}</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="archiveFreelancer(${f.id})" class="text-gray-400 hover:text-yellow-600" title="Archivieren">📦</button>
+                            <button onclick="deleteFreelancer(${f.id})" class="text-gray-400 hover:text-red-600" title="Löschen">🗑️</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            if (archived.length > 0) {
+                container.innerHTML += `
+                    <div class="col-span-full mt-4 pt-4 border-t">
+                        <p class="text-sm text-gray-500 mb-2">Archiviert</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                            ${archived.map(f => `
+                                <div class="p-3 rounded-lg bg-gray-100 opacity-60">
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-sm">${escapeHtml(f.name)}</span>
+                                        <button onclick="unarchiveFreelancer(${f.id})" class="text-xs text-teal-600 hover:text-teal-800">Wiederherstellen</button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        async function addFreelancer() {
+            const name = document.getElementById('fl-name').value.trim();
+            const adresse = document.getElementById('fl-adresse').value.trim();
+            const farbe = document.getElementById('fl-farbe').value;
+
+            if (!name) { alert('Bitte Name eingeben'); return; }
+
+            try {
+                const res = await fetch('/api/freelancers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, adresse, farbe })
+                });
+                if (res.ok) {
+                    const fl = await res.json();
+                    freelancers.push(fl);
+                    document.getElementById('fl-name').value = '';
+                    document.getElementById('fl-adresse').value = '';
+                    renderAll();
+                }
+            } catch (err) {
+                alert('Fehler: ' + err.message);
+            }
+        }
+
+        async function archiveFreelancer(id) {
+            const fl = freelancers.find(f => f.id === id);
+            if (!fl) return;
+            try {
+                await fetch('/api/freelancers/' + id, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...fl, archived: true })
+                });
+                fl.archived = true;
+                renderAll();
+            } catch (err) {
+                alert('Fehler: ' + err.message);
+            }
+        }
+
+        async function unarchiveFreelancer(id) {
+            const fl = freelancers.find(f => f.id === id);
+            if (!fl) return;
+            try {
+                await fetch('/api/freelancers/' + id, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...fl, archived: false })
+                });
+                fl.archived = false;
+                renderAll();
+            } catch (err) {
+                alert('Fehler: ' + err.message);
+            }
+        }
+
+        async function deleteFreelancer(id) {
+            if (!confirm('Freelancer wirklich löschen?')) return;
+            try {
+                await fetch('/api/freelancers/' + id, { method: 'DELETE' });
+                freelancers = freelancers.filter(f => f.id !== id);
+                if (selectedFreelancerId === id) {
+                    selectedFreelancerId = null;
+                    document.getElementById('selected-freelancer-info').classList.add('hidden');
+                }
+                renderAll();
+            } catch (err) {
+                alert('Fehler: ' + err.message);
+            }
+        }
+
+        // ============ ERFASSUNG ============
+        function renderErfassungFreelancerList() {
+            const container = document.getElementById('erfassung-freelancer-list');
+            const active = freelancers.filter(f => !f.archived);
+            container.innerHTML = active.map(f => `
+                <button onclick="selectFreelancer(${f.id})" 
+                    class="fl-card px-4 py-2 rounded-lg text-white font-medium ${selectedFreelancerId === f.id ? 'selected ring-2 ring-offset-2' : ''}"
+                    style="background: ${f.farbe}">
+                    ${escapeHtml(f.name)}
+                </button>
+            `).join('');
+        }
+
+        function selectFreelancer(id) {
+            selectedFreelancerId = id;
+            const fl = freelancers.find(f => f.id === id);
+            if (!fl) return;
+
+            document.getElementById('selected-freelancer-info').classList.remove('hidden');
+            document.getElementById('selected-fl-card').innerHTML = `
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold" style="background: ${fl.farbe}">
+                        ${fl.name.substring(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                        <p class="font-semibold text-lg">${escapeHtml(fl.name)}</p>
+                        <p class="text-sm text-gray-500">${escapeHtml(fl.adresse || '')}</p>
+                    </div>
+                </div>
+            `;
+
+            renderErfassungFreelancerList();
+            renderKautionCheckboxes();
+            renderOffeneKautionen();
+            renderTermine();
+        }
+
+        function renderKautionCheckboxes() {
+            const container = document.getElementById('kaution-checkboxes');
+            const offene = kautionen.filter(k => k.freelancer_id === selectedFreelancerId && !k.ausgezahlt && k.typ === 'Kaution');
+            
+            if (offene.length === 0) {
+                container.innerHTML = '<p class="text-sm text-gray-400">Keine offenen Kautionen</p>';
+            } else {
+                container.innerHTML = offene.map(k => `
+                    <label class="flex items-center gap-2 p-2 bg-gray-50 rounded cursor-pointer hover:bg-gray-100">
+                        <input type="checkbox" value="${k.id}" class="kaution-checkbox">
+                        <span class="text-sm">${escapeHtml(k.bezeichnung)} - ${formatBetrag(k.betrag)}</span>
+                    </label>
+                `).join('');
+            }
+        }
+
+        function renderOffeneKautionen() {
+            const container = document.getElementById('offene-kautionen-list');
+            const offene = kautionen.filter(k => k.freelancer_id === selectedFreelancerId && !k.ausgezahlt && k.typ === 'Kaution');
+            
+            if (offene.length === 0) {
+                container.innerHTML = '<p class="text-sm text-gray-400">Keine offenen Kautionen</p>';
+            } else {
+                container.innerHTML = offene.map(k => `
+                    <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                        <div>
+                            <span class="text-sm font-medium">${escapeHtml(k.bezeichnung)}</span>
+                            <span class="text-xs text-gray-500 ml-2">${formatDatum(k.datum)}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium">${formatBetrag(k.betrag)}</span>
+                            <button onclick="deleteKaution(${k.id})" class="text-red-400 hover:text-red-600">×</button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function renderTermine() {
+            const container = document.getElementById('termine-list');
+            const currentMonth = heuteStr.substring(0, 7);
+            const flTermine = termine.filter(t => t.freelancer_id === selectedFreelancerId && t.datum.substring(0, 7) === currentMonth);
+            
+            if (flTermine.length === 0) {
+                container.innerHTML = '<p class="text-sm text-gray-400">Keine Termine in diesem Monat</p>';
+            } else {
+                container.innerHTML = flTermine.map(t => {
+                    const verrechnungen = t.verrechnungen || [];
+                    const verrechnungStr = verrechnungen.map(v => `${v.bezeichnung} (${formatBetrag(v.betrag)})`).join(', ');
+                    return `
+                        <div class="flex justify-between items-center p-2 bg-orange-50 rounded">
+                            <div>
+                                <span class="text-sm">${formatDatum(t.datum)}</span>
+                                <span class="font-medium ml-2">${formatBetrag(t.gesamtbetrag)}</span>
+                                <span class="text-teal-600 ml-2">→ ${formatBetrag(t.studio_anteil)}</span>
+                                ${verrechnungStr ? `<p class="text-xs text-gray-500 mt-1">${escapeHtml(verrechnungStr)}</p>` : ''}
+                            </div>
+                            <button onclick="deleteTermin(${t.id})" class="text-red-400 hover:text-red-600">×</button>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        function updateStudioAnteil() {
+            const betrag = parseFloat(document.getElementById('termin-betrag').value) || 0;
+            document.getElementById('studio-anteil').textContent = betrag ? `→ Studio-Anteil (30%): ${formatBetrag(betrag * 0.3)}` : '';
+        }
+
+        // Gutschein-Zeilen
+        let gutscheinCount = 0;
+        function addGutscheinZeile() {
+            gutscheinCount++;
+            const container = document.getElementById('gutschein-container');
+            const div = document.createElement('div');
+            div.id = 'gutschein-' + gutscheinCount;
+            div.className = 'flex gap-2';
+            div.innerHTML = `
+                <input type="text" placeholder="Bezeichnung" class="gutschein-bez flex-1 px-2 py-1 border rounded text-sm">
+                <input type="number" step="0.01" placeholder="€" class="gutschein-betrag w-20 px-2 py-1 border rounded text-sm">
+                <button type="button" onclick="this.parentElement.remove()" class="text-red-500 px-2">×</button>
+            `;
+            container.appendChild(div);
+        }
+
+        // PayPal-Zeilen
+        let paypalCount = 0;
+        function addPaypalZeile() {
+            paypalCount++;
+            const container = document.getElementById('paypal-container');
+            const div = document.createElement('div');
+            div.id = 'paypal-' + paypalCount;
+            div.className = 'flex gap-2';
+            div.innerHTML = `
+                <input type="text" placeholder="Bezeichnung" class="paypal-bez flex-1 px-2 py-1 border rounded text-sm">
+                <input type="number" step="0.01" placeholder="€" class="paypal-betrag w-20 px-2 py-1 border rounded text-sm">
+                <button type="button" onclick="this.parentElement.remove()" class="text-red-500 px-2">×</button>
+            `;
+            container.appendChild(div);
+        }
+
+        async function addKaution() {
+            if (!selectedFreelancerId) { alert('Bitte Freelancer auswählen'); return; }
+            const datum = document.getElementById('kaution-datum').value;
+            const bezeichnung = document.getElementById('kaution-bezeichnung').value.trim();
+            const betrag = parseFloat(document.getElementById('kaution-betrag').value);
+
+            if (!datum || !bezeichnung || !betrag) { alert('Bitte alle Felder ausfüllen'); return; }
+
+            try {
+                const res = await fetch('/api/kautionen', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ freelancer_id: selectedFreelancerId, datum, bezeichnung, betrag, typ: 'Kaution' })
+                });
+                if (res.ok) {
+                    const k = await res.json();
+                    kautionen.push(k);
+                    document.getElementById('kaution-bezeichnung').value = '';
+                    document.getElementById('kaution-betrag').value = '';
+                    renderKautionCheckboxes();
+                    renderOffeneKautionen();
+                }
+            } catch (err) {
+                alert('Fehler: ' + err.message);
+            }
+        }
+
+        async function deleteKaution(id) {
+            if (!confirm('Kaution löschen?')) return;
+            try {
+                await fetch('/api/kautionen/' + id, { method: 'DELETE' });
+                kautionen = kautionen.filter(k => k.id !== id);
+                renderKautionCheckboxes();
+                renderOffeneKautionen();
+            } catch (err) {
+                alert('Fehler: ' + err.message);
+            }
+        }
+
+        async function addTermin() {
+            if (!selectedFreelancerId) { alert('Bitte Freelancer auswählen'); return; }
+            const datum = document.getElementById('termin-datum').value;
+            const gesamtbetrag = parseFloat(document.getElementById('termin-betrag').value);
+
+            if (!datum || !gesamtbetrag) { alert('Bitte Datum und Betrag ausfüllen'); return; }
+
+            // Ausgewählte Kautionen
+            const kaution_ids = [];
+            document.querySelectorAll('.kaution-checkbox:checked').forEach(cb => {
+                kaution_ids.push(parseInt(cb.value));
+            });
+
+            // Gutscheine sammeln
+            const gutscheine = [];
+            document.querySelectorAll('#gutschein-container > div').forEach(div => {
+                const bez = div.querySelector('.gutschein-bez').value.trim();
+                const betrag = parseFloat(div.querySelector('.gutschein-betrag').value);
+                if (bez && betrag) gutscheine.push({ bezeichnung: bez, betrag });
+            });
+
+            // PayPal sammeln
+            const paypal_kautionen = [];
+            document.querySelectorAll('#paypal-container > div').forEach(div => {
+                const bez = div.querySelector('.paypal-bez').value.trim();
+                const betrag = parseFloat(div.querySelector('.paypal-betrag').value);
+                if (bez && betrag) paypal_kautionen.push({ bezeichnung: bez, betrag });
+            });
+
+            try {
+                const res = await fetch('/api/termine', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ freelancer_id: selectedFreelancerId, datum, gesamtbetrag, kaution_ids, gutscheine, paypal_kautionen })
+                });
+                if (res.ok) {
+                    // Alles neu laden da sich viel ändert
+                    await loadAllData();
+                    document.getElementById('termin-betrag').value = '';
+                    document.getElementById('studio-anteil').textContent = '';
+                    document.getElementById('gutschein-container').innerHTML = '';
+                    document.getElementById('paypal-container').innerHTML = '';
+                    selectFreelancer(selectedFreelancerId);
+                }
+            } catch (err) {
+                alert('Fehler: ' + err.message);
+            }
+        }
+
+        async function deleteTermin(id) {
+            if (!confirm('Termin löschen? Alle zugehörigen Buchungen werden auch gelöscht.')) return;
+            try {
+                await fetch('/api/termine/' + id, { method: 'DELETE' });
+                await loadAllData();
+                selectFreelancer(selectedFreelancerId);
+            } catch (err) {
+                alert('Fehler: ' + err.message);
+            }
+        }
+
+        // ============ KASSENBUCH ============
+        function renderKassenbuch() {
+            const monat = document.getElementById('kb-monat').value;
+            const jahr = document.getElementById('kb-jahr').value;
+            const currentMonth = jahr + '-' + monat;
+
+            // Buchungen filtern
+            const monatsBuchungen = buchungen.filter(b => (b.datum || '').substring(0, 7) === currentMonth)
+                .sort((a, b) => a.datum.localeCompare(b.datum));
+
+            // Berechnungen
+            let vorMonat = 0;
+            buchungen.forEach(b => {
+                if ((b.datum || '').substring(0, 7) < currentMonth) {
+                    vorMonat += b.typ === 'einnahme' ? parseFloat(b.betrag) : -parseFloat(b.betrag);
+                }
+            });
+            const anfang = anfangsbestand + vorMonat;
+
+            let einnahmenMonat = 0, ausgabenMonat = 0;
+            monatsBuchungen.forEach(b => {
+                if (b.typ === 'einnahme') einnahmenMonat += parseFloat(b.betrag);
+                else ausgabenMonat += parseFloat(b.betrag);
+            });
+            const endbestand = anfang + einnahmenMonat - ausgabenMonat;
+
+            let gesamtBestand = anfangsbestand;
+            buchungen.forEach(b => {
+                gesamtBestand += b.typ === 'einnahme' ? parseFloat(b.betrag) : -parseFloat(b.betrag);
+            });
+
+            // Anzeige
+            document.getElementById('kb-anfangsbestand').textContent = formatBetrag(anfang);
+            document.getElementById('kb-anfangsbestand').className = 'text-2xl font-bold ' + (anfang >= 0 ? 'text-blue-600' : 'text-red-600');
+            document.getElementById('kb-aktuell').textContent = formatBetrag(gesamtBestand);
+            document.getElementById('kb-aktuell').className = 'text-3xl font-bold ' + (gesamtBestand >= 0 ? 'text-teal-600' : 'text-red-600');
+            document.getElementById('kb-endbestand').textContent = formatBetrag(endbestand);
+            document.getElementById('kb-endbestand').className = 'text-2xl font-bold ' + (endbestand >= 0 ? 'text-gray-700' : 'text-red-600');
+            document.getElementById('kb-einnahmen').textContent = formatBetrag(einnahmenMonat);
+            document.getElementById('kb-ausgaben').textContent = formatBetrag(ausgabenMonat);
+            document.getElementById('kb-anzahl').textContent = monatsBuchungen.length + ' Einträge';
+
+            // Liste
+            const container = document.getElementById('buchungen-list');
+            if (monatsBuchungen.length === 0) {
+                container.innerHTML = '<p class="text-gray-400 text-center py-4">Keine Buchungen in diesem Monat</p>';
+            } else {
+                container.innerHTML = monatsBuchungen.map(b => `
+                    <div class="flex items-center justify-between p-3 rounded-lg border-l-4 ${b.typ === 'einnahme' ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50'}">
+                        <div class="flex items-center gap-4">
+                            <span class="text-sm">${formatDatum(b.datum)}</span>
+                            <span class="text-xs px-2 py-1 rounded ${b.typ === 'einnahme' ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}">${b.typ === 'einnahme' ? '+' : '−'}</span>
+                            <span class="font-semibold ${b.typ === 'einnahme' ? 'text-green-700' : 'text-red-700'}">${b.typ === 'einnahme' ? '+' : '−'}${formatBetrag(b.betrag)}</span>
+                            <span class="text-sm text-gray-600">${escapeHtml(b.bemerkung || '-')}</span>
+                            ${b.quelle !== 'manuell' ? '<span class="text-xs bg-gray-200 text-gray-600 px-1 rounded">auto</span>' : ''}
+                        </div>
+                        ${b.quelle === 'manuell' ? `<button onclick="deleteBuchung(${b.id})" class="text-gray-400 hover:text-red-600">🗑️</button>` : ''}
+                    </div>
+                `).join('');
+            }
+        }
+
+        function prevMonthKB() {
+            let m = parseInt(document.getElementById('kb-monat').value);
+            let y = parseInt(document.getElementById('kb-jahr').value);
+            m--;
+            if (m < 1) { m = 12; y--; }
+            document.getElementById('kb-monat').value = String(m).padStart(2, '0');
+            document.getElementById('kb-jahr').value = y;
+            renderKassenbuch();
+        }
+
+        function nextMonthKB() {
+            let m = parseInt(document.getElementById('kb-monat').value);
+            let y = parseInt(document.getElementById('kb-jahr').value);
+            m++;
+            if (m > 12) { m = 1; y++; }
+            document.getElementById('kb-monat').value = String(m).padStart(2, '0');
+            document.getElementById('kb-jahr').value = y;
+            renderKassenbuch();
+        }
+
+        function setBuchungTyp(typ) {
+            buchungTyp = typ;
+            document.getElementById('btn-einnahme').classList.toggle('ring-2', typ === 'einnahme');
+            document.getElementById('btn-einnahme').classList.toggle('ring-green-500', typ === 'einnahme');
+            document.getElementById('btn-ausgabe').classList.toggle('ring-2', typ === 'ausgabe');
+            document.getElementById('btn-ausgabe').classList.toggle('ring-red-500', typ === 'ausgabe');
+        }
+
+        async function addBuchung() {
+            const datum = document.getElementById('buchung-datum').value;
+            const betrag = parseFloat(document.getElementById('buchung-betrag').value);
+            const bemerkung = document.getElementById('buchung-bemerkung').value.trim();
+
+            if (!datum) { alert('Bitte Datum eingeben'); return; }
+            if (!betrag || betrag <= 0) { alert('Bitte gültigen Betrag eingeben'); return; }
+            if (!buchungTyp) { alert('Bitte Einnahme oder Ausgabe auswählen'); return; }
+
+            try {
+                const res = await fetch('/api/buchungen', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ datum, typ: buchungTyp, betrag, bemerkung })
+                });
+                if (res.ok) {
+                    const b = await res.json();
+                    buchungen.push(b);
+                    document.getElementById('buchung-betrag').value = '';
+                    document.getElementById('buchung-bemerkung').value = '';
+                    buchungTyp = null;
+                    document.getElementById('btn-einnahme').classList.remove('ring-2', 'ring-green-500');
+                    document.getElementById('btn-ausgabe').classList.remove('ring-2', 'ring-red-500');
+                    renderKassenbuch();
+                }
+            } catch (err) {
+                alert('Fehler: ' + err.message);
+            }
+        }
+
+        async function deleteBuchung(id) {
+            if (!confirm('Buchung löschen?')) return;
+            try {
+                const res = await fetch('/api/buchungen/' + id, { method: 'DELETE' });
+                if (res.ok) {
+                    buchungen = buchungen.filter(b => b.id !== id);
+                    renderKassenbuch();
+                } else {
+                    const err = await res.json();
+                    alert(err.error);
+                }
+            } catch (err) {
+                alert('Fehler: ' + err.message);
+            }
+        }
+
+        async function setAnfangsbestand() {
+            anfangsbestand = parseFloat(document.getElementById('global-anfangsbestand').value) || 0;
+            try {
+                await fetch('/api/einstellungen/anfangsbestand', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ value: String(anfangsbestand) })
+                });
+                renderKassenbuch();
+            } catch (err) {
+                alert('Fehler: ' + err.message);
+            }
+        }
+
+        // ============ AUSWERTUNG ============
+        async function loadAuswertung() {
+            const monat = document.getElementById('auswertung-monat').value;
+            const jahr = document.getElementById('auswertung-jahr').value;
+
+            try {
+                const res = await fetch('/api/auswertung/' + jahr + '-' + monat);
+                if (res.ok) {
+                    const data = await res.json();
+                    renderAuswertung(data);
+                }
+            } catch (err) {
+                console.error('Auswertung Fehler:', err);
+            }
+        }
+
+        function renderAuswertung(data) {
+            const body = document.getElementById('auswertung-body');
+            const footer = document.getElementById('auswertung-footer');
+
+            let totalTermine = 0, totalUmsatz = 0, totalStudio = 0, totalKautionenAnz = 0, totalKautionenSum = 0;
+
+            body.innerHTML = data.map(f => {
+                totalTermine += f.anzahl_termine;
+                totalUmsatz += f.umsatz;
+                totalStudio += f.studio_anteil;
+                totalKautionenAnz += f.kautionen_anzahl;
+                totalKautionenSum += f.kautionen_summe;
+
+                return `
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="py-2">
+                            <span class="inline-block w-3 h-3 rounded-full mr-2" style="background: ${f.farbe}"></span>
+                            ${escapeHtml(f.name)}
+                        </td>
+                        <td class="text-center py-2">${f.anzahl_termine}</td>
+                        <td class="text-right py-2">${formatBetrag(f.umsatz)}</td>
+                        <td class="text-right py-2 text-teal-600">${formatBetrag(f.studio_anteil)}</td>
+                        <td class="text-center py-2">${f.kautionen_anzahl}</td>
+                        <td class="text-right py-2">${formatBetrag(f.kautionen_summe)}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            footer.innerHTML = `
+                <tr>
+                    <td class="py-2">GESAMT</td>
+                    <td class="text-center py-2">${totalTermine}</td>
+                    <td class="text-right py-2">${formatBetrag(totalUmsatz)}</td>
+                    <td class="text-right py-2 text-teal-600">${formatBetrag(totalStudio)}</td>
+                    <td class="text-center py-2">${totalKautionenAnz}</td>
+                    <td class="text-right py-2">${formatBetrag(totalKautionenSum)}</td>
+                </tr>
+            `;
+        }
+
+        // ============ HILFSFUNKTIONEN ============
+        function formatBetrag(b) {
+            return parseFloat(b).toFixed(2).replace('.', ',') + ' €';
+        }
+
+        function formatDatum(d) {
+            if (!d) return '-';
+            const parts = d.substring(0, 10).split('-');
+            return parts[2] + '.' + parts[1] + '.' + parts[0];
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+
+        function exportKassenbuchPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const monat = document.getElementById('kb-monat').value;
+            const jahr = document.getElementById('kb-jahr').value;
+            const monatNamen = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+            const monatLabel = monatNamen[parseInt(monat) - 1] + ' ' + jahr;
+
+            doc.setFontSize(18);
+            doc.text('Coco Colours - Kassenbuch', 14, 20);
+            doc.setFontSize(12);
+            doc.text(monatLabel, 14, 28);
+
+            const currentMonth = jahr + '-' + monat;
+            const monatsBuchungen = buchungen.filter(b => (b.datum || '').substring(0, 7) === currentMonth)
+                .sort((a, b) => a.datum.localeCompare(b.datum));
+
+            const tableData = monatsBuchungen.map(b => [
+                formatDatum(b.datum),
+                b.typ === 'einnahme' ? '+' : '−',
+                formatBetrag(b.betrag),
+                b.bemerkung || '-'
+            ]);
+
+            doc.autoTable({
+                startY: 35,
+                head: [['Datum', 'Typ', 'Betrag', 'Bemerkung']],
+                body: tableData
+            });
+
+            doc.save('kassenbuch_' + jahr + '-' + monat + '.pdf');
+        }
+
+        // Start
+        init();
+    </script>
+</body>
+</html>
